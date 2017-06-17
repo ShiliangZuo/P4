@@ -47,16 +47,13 @@ public class DatabaseEngine {
     private static BlockChainMinerGrpc.BlockChainMinerBlockingStub blockingStub;
     private static BlockChainMinerGrpc.BlockChainMinerStub asyncStub;
 
-    private static String ZERO64 = "0000000000000000000000000000000000000000000000000000000000000000";
-    private static String ZEROSTRING;
+    private static String ZEROSTRING = "0000000000000000000000000000000000000000000000000000000000000000";
 
     DatabaseEngine(String dataDir, int id, JSONObject config) {
         this.dataDir = dataDir;
         this.serverId = id;
         this.configJson = config;
         this.nServers = config.getInt("nservers");
-        for (int i = 0; i < 256; ++i)
-            ZEROSTRING = ZERO64 + ZERO64 + ZERO64 + ZERO64;
     }
 
     private int getOrZero(String userId) {
