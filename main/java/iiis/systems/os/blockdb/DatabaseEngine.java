@@ -97,7 +97,7 @@ public class DatabaseEngine {
             semaphore.acquire();
             if (type == Transaction.Types.TRANSFER && pattern.matcher(fromId).matches()
                     && pattern.matcher(toId).matches() && !fromId.equals(toId) && value >= 0
-                    && fee >= 0 && transactionRecords.contains(request.getUUID()) == false) {
+                    && fee >= 0 && !transactionRecords.contains(request.getUUID())) {
                 int fromBalance = getOrZero(fromId);
                 if (value <= fromBalance && value >= fee) {
                     int toBalance = getOrZero(toId);
@@ -238,7 +238,7 @@ public class DatabaseEngine {
 
             boolean flag = true;
             while (blockTree.containsKey(curBlock.getPrevHash()) == false) {
-                if (curBlock.getPrevHash() == ZEROSTRING) {
+                if (curBlock.getPrevHash().equals(ZEROSTRING)) {
                     break;
                 }
                 curBlock = queryBlock(curBlock.getPrevHash());
@@ -252,6 +252,11 @@ public class DatabaseEngine {
                 return;
             }
 
+            //Check whether this chain is valid, and switch
+            // TODO
+            boolean isValid = checkAndSwitch(chain);
+
+
             //Add this new chain to Hashmap
             for (Block aBlock : chain) {
                 blockTree.put(Hash.getHashString(aBlock.toString()), aBlock);
@@ -261,11 +266,7 @@ public class DatabaseEngine {
             if (chain.getLast().getBlockID() >= blockChain.getLast().getBlockID()) {
                 if (Hash.getHashString(chain.getLast().toString()).compareTo(
                         Hash.getHashString(blockChain.getLast().toString())) < 0) {
-                    //Actually, this function should return a bool
-                    //If failed because of invalid blocks,
-                    // need to restore the original chain and balance,...
-                    // TODO
-                    switchChain(chain.getLast());
+                    switchChain(chain);
                 }
             }
 
@@ -279,20 +280,18 @@ public class DatabaseEngine {
         return null;
     }
 
-    private void switchChain(Block block) {
-        LinkedList<Block> newChain = new LinkedList<>();
-        Block curBlock = block;
-        while (blockChain.contains(curBlock) == false) {
-            newChain.addFirst(curBlock);
-            curBlock = blockTree.get(curBlock.getPrevHash());
-        }
+    private void checkAndSwitch(LinkedList<Block> blockList) {
+        LinkedList<Block> blockChainClone = (LinkedList<Block>)blockChain.clone();
+    }
 
-        while (blockChain.getLast() != curBlock) {
+    private void switchChain(LinkedList<Block> blockList) {
+
+        while (blockChain.getLast() != blockList.getFirst()) {
             reverseBlock(blockChain.getLast());
             blockChain.removeLast();
         }
 
-        for (Block newBlock : newChain) {
+        for (Block newBlock : blockList) {
             addToChain(newBlock);
         }
 
@@ -307,7 +306,13 @@ public class DatabaseEngine {
     }
 
     private void addToChain(Block block) {
+        // Add a block to the chain
+        // What should u do when you find out this block is invalid?
+    }
 
+    private boolean isValidChain(LinkedList<Block> blockList) {
+        // TODO
+        return true;
     }
 
     private boolean isValidBlockString(String blockString) {
