@@ -1,8 +1,8 @@
-package iiis.systems.os.blockdb.hash;
+package iiis.systems.os.blockdb;
 
-        import java.nio.charset.StandardCharsets;
-        import java.security.MessageDigest;
-        import java.security.NoSuchAlgorithmException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 public class Hash {
     public static String getHashString(String string) {

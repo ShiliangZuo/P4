@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "iiis.systems.os.blockchaindb";
+option java_package = "iiis.systems.os.blockdb";
 option java_outer_classname = "DBProto";
 
 package blockdb;

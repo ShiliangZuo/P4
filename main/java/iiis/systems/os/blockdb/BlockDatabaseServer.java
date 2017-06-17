@@ -40,20 +40,36 @@ public class BlockDatabaseServer {
     }
 
     public static void main(String[] args) throws IOException, JSONException, InterruptedException {
-        JSONObject config = Util.readJsonFile("config.json");
-        config = (JSONObject)config.get("1");
-        String address = config.getString("ip");
-        int port = Integer.parseInt(config.getString("port"));
-        String dataDir = config.getString("dataDir");
 
-        DatabaseEngine.setup(dataDir);
+        System.out.println(args.length);
+        for (int i = 0 ; i < args.length; ++i) {
+            System.out.println(args[i]);
+        }
+
+        int id = 0;
+
+        if (args[0].substring(0,5) == "--id=") {
+            id = Integer.parseInt(args[0].substring(5));
+        }
+
+        System.out.println("Server about to start...!!");
+
+        JSONObject config = Util.readJsonFile("config.json");
+
+        JSONObject thisServer = (JSONObject)config.get("1");
+
+        String address = thisServer.getString("ip");
+        int port = Integer.parseInt(thisServer.getString("port"));
+        String dataDir = thisServer.getString("dataDir");
+
+        DatabaseEngine.setup(dataDir, id, config);
 
         final BlockDatabaseServer server = new BlockDatabaseServer();
         server.start(address, port);
         server.blockUntilShutdown();
     }
 
-    static class BlockDatabaseImpl extends BlockDatabaseGrpc.BlockDatabaseImplBase {
+    static class BlockDatabaseImpl extends BlockChainMinerGrpc.BlockChainMinerImplBase {
         private final DatabaseEngine dbEngine = DatabaseEngine.getInstance();
 
         @Override
@@ -65,43 +81,54 @@ public class BlockDatabaseServer {
         }
 
         @Override
-        public void put(Request request, StreamObserver<BooleanResponse> responseObserver) {
-            boolean success = dbEngine.put(request.getUserID(), request.getValue());
+        public void transfer(Transaction request, StreamObserver<BooleanResponse> responseObserver) {
+            boolean transferSuccess = dbEngine.transfer(request);
+            boolean broadcastSuccess = dbEngine.broadcast(request);
+            boolean success = transferSuccess && broadcastSuccess;
             BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
 
         @Override
-        public void withdraw(Request request, StreamObserver<BooleanResponse> responseObserver) {
-            boolean success = dbEngine.withdraw(request.getUserID(), request.getValue());
-            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
+        public void verify(Transaction request, StreamObserver<VerifyResponse> responseObserver) {
+            VerifyResponse response = dbEngine.verify(request);
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
 
         @Override
-        public void deposit(Request request, StreamObserver<BooleanResponse> responseObserver) {
-            boolean success = dbEngine.deposit(request.getUserID(), request.getValue());
-            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
+        public void getBlock(GetBlockRequest request, StreamObserver<JsonBlockString> responseObserver) {
+            JsonBlockString blockString = dbEngine.getBlock(request);
+            responseObserver.onNext(blockString);
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void getHeight(Null aNull, StreamObserver<GetHeightResponse> responseObserver) {
+            GetHeightResponse response = dbEngine.getHeight();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        }
+
+
+        @Override
+        public void pushTransaction(Transaction request, StreamObserver<Null> responseObserver) {
+            dbEngine.receive(request);
+            Null response = Null.newBuilder().build();
+
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
 
         @Override
-        public void transfer(TransferRequest request, StreamObserver<BooleanResponse> responseObserver) {
-            boolean success = dbEngine.transfer(request.getFromID(), request.getToID(), request.getValue());
-            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
+        public void pushBlock(JsonBlockString block, StreamObserver<Null> responseObserver) {
+            dbEngine.pushBlock(block);
+            Null response = Null.newBuilder().build();
+
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
 
-        @Override
-        public void logLength(Null request, StreamObserver<GetResponse> responseObserver) {
-            int value = dbEngine.getLogLength();
-            GetResponse response = GetResponse.newBuilder().setValue(value).build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
-        }
     }
 }
