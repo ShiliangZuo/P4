@@ -363,6 +363,9 @@ public class DatabaseEngine {
             if (Hash.getHashString(tailoredChain.getLast().toString()).compareTo(
                     Hash.getHashString(blockChain.getLast().toString())) < 0) {
                 switchChain(tailoredChain);
+                balances = oldBalances;
+                oldChain.addAll(tailoredChain);
+                blockChain = oldChain;
             }
         }
     }
