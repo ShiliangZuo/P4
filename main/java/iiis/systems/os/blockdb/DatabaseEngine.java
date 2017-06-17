@@ -369,31 +369,28 @@ public class DatabaseEngine {
 
     private void switchChain(LinkedList<Block> blockList) {
 
-        // 
-
-        while (blockChain.getLast() != blockList.getFirst()) {
-            reverseBlock(blockChain.getLast());
+        // Only Need to modify transactionRecords and pendingTransactions?
+        Block ancestorBlock = blockTree.get(blockList.getFirst().getPrevHash());
+        while (blockChain.getLast() != ancestorBlock) {
+            List<Transaction> transactionList = blockChain.getLast().getTransactionsList();
             blockChain.removeLast();
+            for (Transaction request : transactionList) {
+                transactionRecords.remove(request.getUUID());
+                pendingTransactions.add(request);
+            }
         }
 
         for (Block newBlock : blockList) {
-            addToChain(newBlock);
+            blockChain.add(newBlock);
+            List<Transaction> transactionList = newBlock.getTransactionsList();
+            for (Transaction request : transactionList) {
+                transactionRecords.add(request.getUUID());
+                pendingTransactions.remove(request);
+            }
         }
 
         // Need to delete old thread, and create a new Mining Thread
         // TODO
-    }
-
-    private void reverseBlock(Block Block) {
-        //1. Maintain the correct balance
-        //2. Add the transactions to pendingTransactions List
-        //TODO
-    }
-
-    private void addToChain(Block block) {
-        // Add a block to the chain
-        // What should u do when you find out this block is invalid?
-        //TODO
     }
 
     private class DefaultHashMap<K,V> extends HashMap<K,V> {
