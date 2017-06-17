@@ -8,10 +8,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.json.JSONObject;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
@@ -26,7 +23,8 @@ public class DatabaseEngine {
         instance = new DatabaseEngine(dataDir, id, config);
     }
 
-    private HashMap<String, Integer> balances = new HashMap<>();
+    private DefaultHashMap<String, Integer> balances = new DefaultHashMap<>(1000);
+    private int initBal = 1000;
     private String dataDir;
     private int serverId;
     private JSONObject configJson;
@@ -103,11 +101,6 @@ public class DatabaseEngine {
                     int toBalance = getOrZero(toId);
                     balances.put(fromId, fromBalance - value);
                     balances.put(toId, toBalance + value - fee);
-                    transactionRecords.add(UUID);
-                    pendingTransactions.add(request);
-
-                    // Need to delete old Thread and create new Mining Thread
-                    // TODO
 
                     semaphore.release();
                     return true;
@@ -159,11 +152,19 @@ public class DatabaseEngine {
         return true;
     }
 
-    public void receive(Transaction request) {
-        if (transactionRecords.contains(request.getUUID()) == false) {
-            transfer(request);
+    public boolean receive(Transaction request) {
+        // Add semaphore?
+        // TODO
+        if (isValidTransaction(request) == false) {
+            return false;
+        }
+        if (transactionRecords.contains(request.getUUID()) == false &&
+                pendingTransactions.contains(request) == false) {
+            //transfer(request);
+            pendingTransactions.push(request);
             broadcast(request);
         }
+        return true;
     }
 
 
@@ -220,10 +221,6 @@ public class DatabaseEngine {
         String jsonString = block.getJson();
         LinkedList<Block> chain = new LinkedList<>();
 
-        if (isValidBlockString(jsonString) == false) {
-            return;
-        }
-
         if (blockTree.containsKey(Hash.getHashString(block.getJson()))) {
             return;
         }
@@ -254,7 +251,7 @@ public class DatabaseEngine {
 
             //Check whether this chain is valid, and switch
             // TODO
-            boolean isValid = checkAndSwitch(chain);
+            checkAndSwitch(chain, blockChain, balances);
 
 
             //Add this new chain to Hashmap
@@ -280,11 +277,99 @@ public class DatabaseEngine {
         return null;
     }
 
-    private void checkAndSwitch(LinkedList<Block> blockList) {
-        LinkedList<Block> blockChainClone = (LinkedList<Block>)blockChain.clone();
+    private void checkAndSwitch(LinkedList<Block> newChain,
+                                LinkedList<Block> oldChain,
+                                DefaultHashMap<String, Integer> oldBalances) {
+        while (oldChain.getLast() != newChain.getFirst()) {
+            Block block = oldChain.getLast();
+            List<Transaction> transactionList = block.getTransactionsList();
+            Collections.reverse(transactionList);
+            for (Transaction tranx : transactionList) {
+                int fromBalance = oldBalances.get(tranx.getFromID());
+                int toBalance = oldBalances.get(tranx.getToID());
+                oldBalances.put(tranx.getFromID(), fromBalance + tranx.getValue());
+                oldBalances.put(tranx.getToID(), toBalance - tranx.getValue() + tranx.getMiningFee());
+            }
+            oldChain.removeLast();
+        }
+
+        newChain.removeFirst();
+
+        LinkedList<Block> tailoredChain = new LinkedList<>();
+
+        for (Block newBlock : newChain) {
+            boolean checkHash = Hash.checkHash(Hash.getHashString(newBlock.toString()));
+            if (checkHash == false) {
+                break;
+            }
+
+            boolean isBlockValid = true;
+
+            //Do we need to check whether the block ID is valid?
+            //TODO
+
+            //Simulate the block, see if it has any invalid transactions
+            List<Transaction> transactionList = newBlock.getTransactionsList();
+            for (Transaction request : transactionList) {
+
+                boolean isTranxValid = false;
+                Transaction.Types type = request.getType();
+                String fromId = request.getFromID();
+                String toId = request.getToID();
+                int value = request.getValue();
+                int fee = request.getMiningFee();
+                String UUID = request.getUUID();
+                try {
+                    semaphore.acquire();
+                    if (type == Transaction.Types.TRANSFER && pattern.matcher(fromId).matches()
+                            && pattern.matcher(toId).matches() && !fromId.equals(toId) && value >= 0
+                            && fee >= 0) {
+                        int fromBalance = oldBalances.get(fromId);
+                        if (value <= fromBalance && value >= fee && fee > 0) {
+                            int toBalance = oldBalances.get(toId);
+                            oldBalances.put(fromId, fromBalance - value);
+                            oldBalances.put(toId, toBalance + value - fee);
+                            isTranxValid = true;
+
+                            semaphore.release();
+                        }
+                    }
+                    semaphore.release();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                if (isTranxValid == false) {
+                    isBlockValid = false;
+                    break;
+                }
+
+            }
+
+            if (isBlockValid == true) {
+                tailoredChain.add(newBlock);
+            } else {
+                break;
+            }
+        }
+
+        //Add this new chain to Hashmap
+        for (Block aBlock : tailoredChain) {
+            blockTree.put(Hash.getHashString(aBlock.toString()), aBlock);
+        }
+
+        //Do we need to switch chain?
+        if (tailoredChain.getLast().getBlockID() >= blockChain.getLast().getBlockID()) {
+            if (Hash.getHashString(tailoredChain.getLast().toString()).compareTo(
+                    Hash.getHashString(blockChain.getLast().toString())) < 0) {
+                switchChain(tailoredChain);
+            }
+        }
     }
 
     private void switchChain(LinkedList<Block> blockList) {
+
+        // 
 
         while (blockChain.getLast() != blockList.getFirst()) {
             reverseBlock(blockChain.getLast());
@@ -308,15 +393,18 @@ public class DatabaseEngine {
     private void addToChain(Block block) {
         // Add a block to the chain
         // What should u do when you find out this block is invalid?
-    }
-
-    private boolean isValidChain(LinkedList<Block> blockList) {
-        // TODO
-        return true;
-    }
-
-    private boolean isValidBlockString(String blockString) {
         //TODO
-        return true;
+    }
+
+    private class DefaultHashMap<K,V> extends HashMap<K,V> {
+        protected V defaultValue;
+        public DefaultHashMap(V defaultValue) {
+            this.defaultValue = defaultValue;
+        }
+        @Override
+        public V get(Object k) {
+            return containsKey(k) ? super.get(k) : defaultValue;
+        }
     }
 }
+

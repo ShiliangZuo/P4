@@ -82,10 +82,11 @@ public class BlockDatabaseServer {
 
         @Override
         public void transfer(Transaction request, StreamObserver<BooleanResponse> responseObserver) {
-            boolean transferSuccess = dbEngine.transfer(request);
-            boolean broadcastSuccess = dbEngine.broadcast(request);
-            boolean success = transferSuccess && broadcastSuccess;
-            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
+            //boolean transferSuccess = dbEngine.transfer(request);
+            //boolean broadcastSuccess = dbEngine.broadcast(request);
+            //boolean success = transferSuccess && broadcastSuccess;
+
+            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(true).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
