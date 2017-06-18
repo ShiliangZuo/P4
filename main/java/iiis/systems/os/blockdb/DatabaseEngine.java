@@ -33,6 +33,8 @@ public class DatabaseEngine {
     private JSONObject configJson;
     private int nServers;
 
+    private int N = 50;
+
     private Semaphore semaphore = new Semaphore(1);
 
     //Transactions that have been written in a block
@@ -58,6 +60,9 @@ public class DatabaseEngine {
     private static BlockChainMinerGrpc.BlockChainMinerStub asyncStub;
 
     private static String ZEROSTRING = "0000000000000000000000000000000000000000000000000000000000000000";
+
+    private boolean mined = false, changed = false;
+    private Thread mining = new Mining(pendingTransactions, balances);
 
     DatabaseEngine(String dataDir, int id, JSONObject config) {
         this.dataDir = dataDir;
@@ -160,6 +165,45 @@ public class DatabaseEngine {
         return true;
     }
 
+    public boolean broadcast(Block request) {
+
+        StreamObserver<Null> observer = new StreamObserver<Null>() {
+
+            @Override
+            public void onNext(Null aNull) {
+
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+
+            }
+
+            @Override
+            public void onCompleted() {
+
+            }
+        };
+
+        for (int i = 1; i <= nServers; ++i) {
+            JSONObject targetServer = (JSONObject) configJson.get(Integer.toString(i));
+
+            String address = targetServer.getString("ip");
+            int port = Integer.parseInt(targetServer.getString("port"));
+
+            channel = ManagedChannelBuilder.forAddress(address, port).usePlaintext(true).build();
+            blockingStub = BlockChainMinerGrpc.newBlockingStub(channel);
+            asyncStub = BlockChainMinerGrpc.newStub(channel);
+            try {
+                asyncStub.pushBlock(JsonBlockString.newBuilder().setJson(JsonFormat.printer().print(request)).build(), observer);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        return true;
+    }
+
     // This is called when the server gets a transfer() or pushTransaction() GRPC call
     public boolean receive(Transaction request) {
         // Add semaphore?
@@ -172,6 +216,11 @@ public class DatabaseEngine {
             //transfer(request);
             pendingTransactions.push(request);
             broadcast(request);
+            changed = true;
+            while(mining.isAlive()){Thread.currentThread().yield();}
+            mining = new Mining(pendingTransactions, balances);
+            changed = false;
+            mining.start();
         }
         return true;
     }
@@ -448,6 +497,12 @@ public class DatabaseEngine {
 
         // Need to delete old thread, and create a new Mining Thread
         // TODO
+
+        changed = true;
+        while(mining.isAlive()){Thread.currentThread().yield();}
+        mining = new Mining(pendingTransactions, balances);
+        changed = false;
+        mining.start();
     }
 
     private class DefaultHashMap<K,V> extends HashMap<K,V> {
@@ -458,6 +513,56 @@ public class DatabaseEngine {
         @Override
         public V get(Object k) {
             return containsKey(k) ? super.get(k) : defaultValue;
+        }
+    }
+
+    private class Mining extends Thread {
+        private int nonce = 0;
+        private LinkedList<Transaction> pendingTransactions;
+        private DefaultHashMap<String, Integer> balances;
+        private Block block;
+        public Mining(LinkedList<Transaction> pendingTransactions, DefaultHashMap<String, Integer> balances) {
+            this.pendingTransactions = pendingTransactions;
+            this.balances = balances;
+        }
+        public void run() {
+            Block.Builder builder = Block.newBuilder().setBlockID(blockChain.size()+1);
+            int sum = 0, value, fee, fromBalance, toBalance;
+            String fromId, toId;
+            for(Transaction transaction: pendingTransactions) {
+                fromId = transaction.getFromID();
+                toId = transaction.getToID();
+                value = transaction.getValue();
+                fee = transaction.getMiningFee();
+                fromBalance = balances.get(fromId);
+                if(!transactionRecords.contains(transaction.getUUID())
+                        && transaction.getType()==Transaction.Types.TRANSFER
+                        && pattern.matcher(fromId).matches()
+                        && pattern.matcher(toId).matches()
+                        && !fromId.equals(toId)
+                        && fee >= 0 && value >= fee && fromBalance >= value) {
+                    builder.addTransactions(transaction);
+                    balances.put(fromId, fromBalance - value);
+                    balances.put(toId, balances.get(toId) + value - fee);
+                    sum++;
+                }
+                if(sum>=N)break;
+            }
+            while(!mined&&!changed) {
+                block = builder.setNonce(Integer.toString(nonce)).build();
+                try {
+                    mined = Hash.checkHash(Hash.getHashString(JsonFormat.printer().print(block)));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                nonce++;
+                if(nonce>=100000000)nonce=0;
+            }
+            if(mined&&!changed) {
+                blockChain.add(block);
+                broadcast(block);
+                mined = false;
+            }
         }
     }
 }
