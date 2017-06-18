@@ -467,13 +467,13 @@ public class DatabaseEngine {
 
         //Add this new chain to Hashmap
         for (Block aBlock : tailoredChain) {
-            blockTree.put(Hash.getHashString(aBlock.toString()), aBlock);
+            blockTree.put(Hash.getHashString(toJsonString(aBlock)), aBlock);
         }
 
         //Do we need to switch chain?
         if (tailoredChain.getLast().getBlockID() >= blockChain.getLast().getBlockID()) {
-            if (Hash.getHashString(tailoredChain.getLast().toString()).compareTo(
-                    Hash.getHashString(blockChain.getLast().toString())) < 0) {
+            if (Hash.getHashString(toJsonString(tailoredChain.getLast())).compareTo(
+                    Hash.getHashString(toJsonString(blockChain.getLast()))) < 0) {
                 switchChain(tailoredChain);
                 balances = oldBalances;
                 oldChain.addAll(tailoredChain);
@@ -589,5 +589,16 @@ public class DatabaseEngine {
                 mined = false;
             }
         }
+    }
+
+    private String toJsonString(Block block) {
+        try {
+            String jsonString = JsonFormat.printer().print(block);
+            return jsonString;
+        }
+        catch (InvalidProtocolBufferException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }
