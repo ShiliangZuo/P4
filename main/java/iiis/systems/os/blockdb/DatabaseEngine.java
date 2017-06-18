@@ -536,6 +536,22 @@ public class DatabaseEngine {
         }
         public void run() {
             Block.Builder builder = Block.newBuilder().setBlockID(blockChain.size()+1);
+
+            String twoDigit = String.format("%02d", serverId);
+            builder.setMinerID("Server" + twoDigit);
+            if (blockChain.size() == 0) {
+                builder.setPrevHash(ZEROSTRING);
+            }
+            else {
+                String jsonString = null;
+                try {
+                    jsonString = JsonFormat.printer().print(blockChain.getLast());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                builder.setPrevHash(Hash.getHashString(jsonString));
+            }
+
             int sum = 0, value, fee, fromBalance, toBalance;
             String fromId, toId;
             for(Transaction transaction: pendingTransactions) {
