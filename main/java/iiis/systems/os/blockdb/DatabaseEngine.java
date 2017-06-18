@@ -23,6 +23,8 @@ public class DatabaseEngine {
         instance = new DatabaseEngine(dataDir, id, config);
     }
 
+    private Thread miningThread;
+
     private DefaultHashMap<String, Integer> balances = new DefaultHashMap<>(1000);
     private int initBal = 1000;
     private String dataDir;
@@ -164,6 +166,14 @@ public class DatabaseEngine {
         return true;
     }
 
+    private boolean isValidTransaction(Transaction request) {
+        if (request.getMiningFee() <= 0)
+            return false;
+        if (request.getValue() < request.getMiningFee())
+            return false;
+        return true;
+    }
+
 
     public VerifyResponse verify(Transaction request) {
         VerifyResponse.Builder builder = VerifyResponse.newBuilder();
@@ -270,7 +280,33 @@ public class DatabaseEngine {
     }
 
     private Block queryBlock(String hash) {
-        //TODO
+
+        for (int i = 1; i <= nServers; ++i) {
+            if (i == serverId) {
+                continue;
+            }
+            JSONObject targetServer = (JSONObject) configJson.get(Integer.toString(i));
+
+            String address = targetServer.getString("ip");
+            int port = Integer.parseInt(targetServer.getString("port"));
+
+            channel = ManagedChannelBuilder.forAddress(address, port).usePlaintext(true).build();
+            blockingStub = BlockChainMinerGrpc.newBlockingStub(channel);
+            asyncStub = BlockChainMinerGrpc.newStub(channel);
+            GetBlockRequest request = GetBlockRequest.newBuilder().setBlockHash(hash).build();
+            JsonBlockString blockString = blockingStub.getBlock(request);
+            if (blockString != null) {
+                Block.Builder builder = Block.newBuilder();
+                try {
+                    JsonFormat.parser().merge(blockString.getJson(), builder);
+                } catch (InvalidProtocolBufferException e) {
+                    e.printStackTrace();
+                    return null;
+                }
+                return builder.build();
+            }
+        }
+
         return null;
     }
 
