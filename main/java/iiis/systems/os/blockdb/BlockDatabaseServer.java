@@ -48,7 +48,7 @@ public class BlockDatabaseServer {
 
         int id = 0;
 
-        if (args.length == 0 || args[0].substring(0,5).equals("--id=")) {
+        if (args.length > 0 || args[0].substring(0,5).equals("--id=")) {
             id = Integer.parseInt(args[0].substring(5));
         }
 
