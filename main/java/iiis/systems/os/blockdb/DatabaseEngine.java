@@ -7,6 +7,7 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.json.JSONObject;
+import org.omg.CORBA.DynAnyPackage.Invalid;
 
 import java.util.*;
 import java.util.concurrent.Semaphore;
@@ -23,21 +24,27 @@ public class DatabaseEngine {
         instance = new DatabaseEngine(dataDir, id, config);
     }
 
-    private Thread miningThread;
-
+    //A hashmap that returns default 1000 if key not found
     private DefaultHashMap<String, Integer> balances = new DefaultHashMap<>(1000);
-    private int initBal = 1000;
     private String dataDir;
+
+    //The id of this server
     private int serverId;
     private JSONObject configJson;
     private int nServers;
 
     private Semaphore semaphore = new Semaphore(1);
 
+    //Transactions that have been written in a block
     private HashSet<String> transactionRecords = new HashSet<>();
+
+    //Transactions that have not been written in a block
     private LinkedList<Transaction> pendingTransactions = new LinkedList<>();
 
+    //The structure of block tree
     private HashMap<String, Block> blockTree = new HashMap<>();
+
+    //Maintains the longest chain
     private LinkedList<Block> blockChain = new LinkedList<>();
 
     //Use regular expression to match username
@@ -45,6 +52,7 @@ public class DatabaseEngine {
     final String template = "[a-z0-9|-]{" + userIdLength + "}";
     Pattern pattern = Pattern.compile(template, Pattern.CASE_INSENSITIVE);
 
+    //Used for communication
     private static ManagedChannel channel;
     private static BlockChainMinerGrpc.BlockChainMinerBlockingStub blockingStub;
     private static BlockChainMinerGrpc.BlockChainMinerStub asyncStub;
@@ -113,6 +121,7 @@ public class DatabaseEngine {
         return false;
     }
 
+    // Broadcast a request to other servers
     public boolean broadcast(Transaction request) {
 
         StreamObserver<Null> observer = new StreamObserver<Null>() {
@@ -151,6 +160,7 @@ public class DatabaseEngine {
         return true;
     }
 
+    // This is called when the server gets a transfer() or pushTransaction() GRPC call
     public boolean receive(Transaction request) {
         // Add semaphore?
         // TODO
@@ -179,12 +189,12 @@ public class DatabaseEngine {
         VerifyResponse.Builder builder = VerifyResponse.newBuilder();
         Block recentBlock = blockChain.getLast();
         Block block = recentBlock;
-        while (block != null && block.getBlockID() > 0)
-        {
-            if (block.getTransactionsList().contains(request))
+
+        while (block != null && block.getBlockID() > 0) {
+            if (block.getTransactionsList().contains(request)) {
                 try {
                     VerifyResponse.Results flag;
-                    if (recentBlock.getBlockID()-block.getBlockID()>=6) {
+                    if (recentBlock.getBlockID() - block.getBlockID() >= 6) {
                         flag = VerifyResponse.Results.SUCCEEDED;
                     } else {
                         flag = VerifyResponse.Results.PENDING;
@@ -192,13 +202,14 @@ public class DatabaseEngine {
                     return builder.setBlockHash(Hash.getHashString(JsonFormat.printer().print(block)))
                             .setResult(flag)
                             .build();
-                } catch (Exception e) {
+                } catch (InvalidProtocolBufferException e) {
                     e.printStackTrace();
                     return null;
                 }
+            }
             block = blockTree.get(block.getPrevHash());
         }
-        return builder.setResult(VerifyResponse.Results.FAILED).setBlockHash(null).build();
+        return builder.setResult(VerifyResponse.Results.FAILED).build();
     }
 
     public GetHeightResponse getHeight() {
@@ -215,7 +226,15 @@ public class DatabaseEngine {
     public JsonBlockString getBlock(GetBlockRequest request) {
         if (blockTree.containsKey(request.getBlockHash()) == true) {
             Block block = blockTree.get(request.getBlockHash());
-            JsonBlockString blockString = JsonBlockString.newBuilder().setJson(block.toString()).build();
+            String jsonString;
+            try {
+                jsonString = JsonFormat.printer().print(block);
+            } catch (InvalidProtocolBufferException e) {
+                //TODO
+                //return null or a JSONBlockString with a null Json field?
+                return null;
+            }
+            JsonBlockString blockString = JsonBlockString.newBuilder().setJson(jsonString).build();
             return blockString;
         }
         else {
@@ -261,6 +280,7 @@ public class DatabaseEngine {
             checkAndSwitch(chain, blockChain, balances);
 
 
+            /*
             //Add this new chain to Hashmap
             for (Block aBlock : chain) {
                 blockTree.put(Hash.getHashString(aBlock.toString()), aBlock);
@@ -273,6 +293,7 @@ public class DatabaseEngine {
                     switchChain(chain);
                 }
             }
+            */
 
         } catch (InvalidProtocolBufferException e) {
             e.printStackTrace();
@@ -440,4 +461,3 @@ public class DatabaseEngine {
         }
     }
 }
-
