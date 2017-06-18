@@ -163,7 +163,11 @@ public class DatabaseEngine {
             channel = ManagedChannelBuilder.forAddress(address, port).usePlaintext(true).build();
             blockingStub = BlockChainMinerGrpc.newBlockingStub(channel);
             asyncStub = BlockChainMinerGrpc.newStub(channel);
-            blockingStub.pushTransaction(request);
+            try {
+                blockingStub.pushTransaction(request);
+            } catch (StatusRuntimeException e) {
+                e.printStackTrace();
+            }
         }
 
         return true;
