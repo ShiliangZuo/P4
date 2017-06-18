@@ -163,7 +163,7 @@ public class DatabaseEngine {
             channel = ManagedChannelBuilder.forAddress(address, port).usePlaintext(true).build();
             blockingStub = BlockChainMinerGrpc.newBlockingStub(channel);
             asyncStub = BlockChainMinerGrpc.newStub(channel);
-            asyncStub.pushTransaction(request, observer);
+            blockingStub.pushTransaction(request);
         }
 
         return true;
@@ -199,7 +199,7 @@ public class DatabaseEngine {
             blockingStub = BlockChainMinerGrpc.newBlockingStub(channel);
             asyncStub = BlockChainMinerGrpc.newStub(channel);
             try {
-                asyncStub.pushBlock(JsonBlockString.newBuilder().setJson(JsonFormat.printer().print(request)).build(), observer);
+                blockingStub.pushBlock(JsonBlockString.newBuilder().setJson(JsonFormat.printer().print(request)).build());
             } catch (Exception e) {
                 e.printStackTrace();
             }

@@ -56,7 +56,7 @@ public class BlockDatabaseServer {
 
         JSONObject config = Util.readJsonFile("config.json");
 
-        JSONObject thisServer = (JSONObject)config.get("1");
+        JSONObject thisServer = (JSONObject)config.get("" + id);
 
         String address = thisServer.getString("ip");
         int port = Integer.parseInt(thisServer.getString("port"));
