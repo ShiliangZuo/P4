@@ -402,7 +402,13 @@ public class DatabaseEngine {
         LinkedList<Block> tailoredChain = new LinkedList<>();
 
         for (Block newBlock : newChain) {
-            boolean checkHash = Hash.checkHash(Hash.getHashString(newBlock.toString()));
+            String jsonString = null;
+            try {
+                jsonString = JsonFormat.printer().print(newBlock);
+            } catch(Exception e) {
+                e.printStackTrace();
+            }
+            boolean checkHash = Hash.checkHash(Hash.getHashString(jsonString));
             if (checkHash == false) {
                 break;
             }
