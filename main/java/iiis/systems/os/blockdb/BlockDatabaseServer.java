@@ -86,7 +86,9 @@ public class BlockDatabaseServer {
             //boolean broadcastSuccess = dbEngine.broadcast(request);
             //boolean success = transferSuccess && broadcastSuccess;
 
-            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(true).build();
+            boolean success = dbEngine.receive(request);
+
+            BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
