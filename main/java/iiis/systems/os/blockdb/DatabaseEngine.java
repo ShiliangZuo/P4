@@ -584,7 +584,6 @@ public class DatabaseEngine {
                 if(nonce>=100000000)nonce=0;
             }
             if(mined&&!changed) {
-                blockChain.add(block);
                 broadcast(block);
                 mined = false;
             }
