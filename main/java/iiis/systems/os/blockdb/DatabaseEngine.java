@@ -194,6 +194,9 @@ public class DatabaseEngine {
         };
 
         for (int i = 1; i <= nServers; ++i) {
+            if (i == serverId)
+                continue;
+
             JSONObject targetServer = (JSONObject) configJson.get(Integer.toString(i));
 
             String address = targetServer.getString("ip");
@@ -538,14 +541,14 @@ public class DatabaseEngine {
 
     private class Mining extends Thread {
         private int nonce = 0;
-        private LinkedList<Transaction> pendingTransactions;
-        private DefaultHashMap<String, Integer> balances;
+        private LinkedList<Transaction> tmppendingTransactions;
+        private DefaultHashMap<String, Integer> tmpbalances;
         private Block block;
         public Mining(LinkedList<Transaction> pendingTransactions, DefaultHashMap<String, Integer> balances) {
             //this.pendingTransactions = pendingTransactions;
-            this.pendingTransactions = new LinkedList<>(pendingTransactions);
-            this.balances = new DefaultHashMap<>(1000);
-            this.balances.putAll(balances);
+            this.tmppendingTransactions = new LinkedList<>(pendingTransactions);
+            this.tmpbalances = new DefaultHashMap<>(1000);
+            this.tmpbalances.putAll(balances);
         }
         public void run() {
             Block.Builder builder = Block.newBuilder().setBlockID(blockChain.size()+1);
@@ -567,12 +570,12 @@ public class DatabaseEngine {
 
             int sum = 0, value, fee, fromBalance, toBalance;
             String fromId, toId;
-            for(Transaction transaction: pendingTransactions) {
+            for(Transaction transaction: tmppendingTransactions) {
                 fromId = transaction.getFromID();
                 toId = transaction.getToID();
                 value = transaction.getValue();
                 fee = transaction.getMiningFee();
-                fromBalance = balances.get(fromId);
+                fromBalance = tmpbalances.get(fromId);
                 if(!transactionRecords.contains(transaction.getUUID())
                         && transaction.getType()==Transaction.Types.TRANSFER
                         && pattern.matcher(fromId).matches()
@@ -580,8 +583,8 @@ public class DatabaseEngine {
                         && !fromId.equals(toId)
                         && fee >= 0 && value >= fee && fromBalance >= value) {
                     builder.addTransactions(transaction);
-                    balances.put(fromId, fromBalance - value);
-                    balances.put(toId, balances.get(toId) + value - fee);
+                    tmpbalances.put(fromId, fromBalance - value);
+                    tmpbalances.put(toId, tmpbalances.get(toId) + value - fee);
                     sum++;
                 }
                 if(sum>=N)break;
@@ -597,6 +600,11 @@ public class DatabaseEngine {
                 if(nonce>=100000000)nonce=0;
             }
             if(mined&&!changed) {
+                for (Transaction tranx : block.getTransactionsList()) {
+                    pendingTransactions.remove(tranx);
+                    transactionRecords.add(tranx.getUUID());
+                    balances = tmpbalances;
+                }
                 broadcast(block);
                 mined = false;
             }
