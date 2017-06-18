@@ -333,7 +333,7 @@ public class DatabaseEngine {
 
             //Check whether this chain is valid, and switch
             // TODO
-            checkAndSwitch(chain, blockChain, balances);
+            checkAndSwitch(chain);
 
 
             /*
