@@ -399,7 +399,7 @@ public class DatabaseEngine {
         LinkedList<Block> oldChain = new LinkedList<>(blockChain);
         DefaultHashMap<String, Integer> oldBalances = new DefaultHashMap<>(1000);
         oldBalances.putAll(balances);
-        while (oldChain.getLast() != newChain.getFirst()) {
+        while (oldChain.getLast() != null || oldChain.getLast() != newChain.getFirst()) {
             Block block = oldChain.getLast();
             List<Transaction> transactionList = block.getTransactionsList();
             Collections.reverse(transactionList);
@@ -412,7 +412,8 @@ public class DatabaseEngine {
             oldChain.removeLast();
         }
 
-        newChain.removeFirst();
+        if (oldChain.getLast() == newChain.getFirst())
+            newChain.removeFirst();
 
         LinkedList<Block> tailoredChain = new LinkedList<>();
 
@@ -605,6 +606,7 @@ public class DatabaseEngine {
                     transactionRecords.add(tranx.getUUID());
                     balances = tmpbalances;
                 }
+                blockChain.add(block);
                 broadcast(block);
                 mined = false;
             }
