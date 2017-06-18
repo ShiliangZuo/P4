@@ -61,9 +61,9 @@ public class DatabaseEngine {
 
     private static String ZEROSTRING = "0000000000000000000000000000000000000000000000000000000000000000";
 
-    //private boolean mined = false, changed = false;
-    //private Thread mining = new Mining(pendingTransactions, balances);
-    private Mining mining;
+    private boolean mined = false, changed = false;
+    private Mining mining = new Mining(pendingTransactions, balances);
+    //private Mining mining;
 
     DatabaseEngine(String dataDir, int id, JSONObject config) {
         this.dataDir = dataDir;
@@ -218,8 +218,10 @@ public class DatabaseEngine {
             pendingTransactions.push(request);
             broadcast(request);
 
-            mining.terminate();
+            changed = true;
+            while(mining.isAlive()){Thread.currentThread().yield();}
             mining = new Mining(pendingTransactions, balances);
+            changed = false;
             mining.start();
 
         }
@@ -505,8 +507,10 @@ public class DatabaseEngine {
         // Need to delete old thread, and create a new Mining Thread
         // TODO
 
-        mining.terminate();
+        changed = true;
+        while(mining.isAlive()){Thread.currentThread().yield();}
         mining = new Mining(pendingTransactions, balances);
+        changed = false;
         mining.start();
     }
 
@@ -526,16 +530,12 @@ public class DatabaseEngine {
         private LinkedList<Transaction> pendingTransactions;
         private DefaultHashMap<String, Integer> balances;
         private Block block;
-        private boolean miningSucceeded = false;
-        private volatile boolean exit = false;
-
         public Mining(LinkedList<Transaction> pendingTransactions, DefaultHashMap<String, Integer> balances) {
             this.pendingTransactions = pendingTransactions;
             this.balances = balances;
         }
-
         public void run() {
-            Block.Builder builder = Block.newBuilder().setBlockID(blockChain.size() + 1);
+            Block.Builder builder = Block.newBuilder().setBlockID(blockChain.size()+1);
             int sum = 0, value, fee, fromBalance, toBalance;
             String fromId, toId;
             for(Transaction transaction: pendingTransactions) {
@@ -544,7 +544,6 @@ public class DatabaseEngine {
                 value = transaction.getValue();
                 fee = transaction.getMiningFee();
                 fromBalance = balances.get(fromId);
-                toBalance = balances.get(toId);
                 if(!transactionRecords.contains(transaction.getUUID())
                         && transaction.getType()==Transaction.Types.TRANSFER
                         && pattern.matcher(fromId).matches()
@@ -553,30 +552,26 @@ public class DatabaseEngine {
                         && fee >= 0 && value >= fee && fromBalance >= value) {
                     builder.addTransactions(transaction);
                     balances.put(fromId, fromBalance - value);
-                    balances.put(toId, toBalance + value - fee);
+                    balances.put(toId, balances.get(toId) + value - fee);
                     sum++;
                 }
                 if(sum>=N)break;
             }
-            while(!miningSucceeded && (!exit)) {
+            while(!mined&&!changed) {
                 block = builder.setNonce(Integer.toString(nonce)).build();
                 try {
-                    miningSucceeded = Hash.checkHash(Hash.getHashString(JsonFormat.printer().print(block)));
+                    mined = Hash.checkHash(Hash.getHashString(JsonFormat.printer().print(block)));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
                 nonce++;
-                if (nonce >= 100000000)
-                    nonce=0;
+                if(nonce>=100000000)nonce=0;
             }
-            if(miningSucceeded) {
+            if(mined&&!changed) {
+                blockChain.add(block);
                 broadcast(block);
+                mined = false;
             }
         }
-
-        public void terminate() {
-            exit = true;
-        }
-
     }
 }
