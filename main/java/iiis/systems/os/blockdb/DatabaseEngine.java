@@ -13,6 +13,9 @@ import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
+//TODO:
+//BlockChain can have length 0, getFirst/getLast/get returns null!!
+
 public class DatabaseEngine {
     private static DatabaseEngine instance = null;
 
@@ -267,7 +270,8 @@ public class DatabaseEngine {
     public GetHeightResponse getHeight() {
         try {
             Block recentBlock = blockChain.getLast();
-            return GetHeightResponse.newBuilder().setHeight(recentBlock.getBlockID()).
+            int blockId = recentBlock == null ? 0 : recentBlock.getBlockID();
+            return GetHeightResponse.newBuilder().setHeight(blockId).
                     setLeafHash(Hash.getHashString(JsonFormat.printer().print(recentBlock))).build();
         } catch (Exception e) {
             e.printStackTrace();
@@ -383,9 +387,11 @@ public class DatabaseEngine {
         return null;
     }
 
-    private void checkAndSwitch(LinkedList<Block> newChain,
-                                LinkedList<Block> oldChain,
-                                DefaultHashMap<String, Integer> oldBalances) {
+    private void checkAndSwitch(LinkedList<Block> chain) {
+        LinkedList<Block> newChain = new LinkedList<>(chain);
+        LinkedList<Block> oldChain = new LinkedList<>(blockChain);
+        DefaultHashMap<String, Integer> oldBalances = new DefaultHashMap<>(1000);
+        oldBalances.putAll(balances);
         while (oldChain.getLast() != newChain.getFirst()) {
             Block block = oldChain.getLast();
             List<Transaction> transactionList = block.getTransactionsList();
@@ -482,8 +488,9 @@ public class DatabaseEngine {
         }
     }
 
-    private void switchChain(LinkedList<Block> blockList) {
+    private void switchChain(LinkedList<Block> newBlockList) {
 
+        LinkedList<Block> blockList = new LinkedList<>(newBlockList);
         // Only Need to modify transactionRecords and pendingTransactions?
         Block ancestorBlock = blockTree.get(blockList.getFirst().getPrevHash());
         while (blockChain.getLast() != ancestorBlock) {
@@ -531,8 +538,10 @@ public class DatabaseEngine {
         private DefaultHashMap<String, Integer> balances;
         private Block block;
         public Mining(LinkedList<Transaction> pendingTransactions, DefaultHashMap<String, Integer> balances) {
-            this.pendingTransactions = pendingTransactions;
-            this.balances = balances;
+            //this.pendingTransactions = pendingTransactions;
+            this.pendingTransactions = new LinkedList<>(pendingTransactions);
+            this.balances = new DefaultHashMap<>(1000);
+            this.balances.putAll(balances);
         }
         public void run() {
             Block.Builder builder = Block.newBuilder().setBlockID(blockChain.size()+1);
